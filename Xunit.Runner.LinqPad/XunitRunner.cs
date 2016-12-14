@@ -12,45 +12,87 @@ namespace Xunit.Runner.LinqPad
 {
     public class XunitRunner
     {
-        // We use consoleLock because messages can arrive in parallel, so we want to make sure we get
-        // consistent console output.
-        static object consoleLock = new object();
+        private object sync = new object();
+        private ManualResetEvent done;
+        private int result = 0;
+        private Assembly testAssembly = null;
 
-        // Use an event to know when we're done
-        static ManualResetEvent finished = new ManualResetEvent(false);
-
-        // Start out assuming success; we'll set this to 1 if we get a failed test
-        static int result = 0;
-
-        public static int Run(Assembly assembly)
-        {
-            var targetAssembly = GetTargetAssemblyFilename(assembly);
-                        
-            using (var runner = AssemblyRunner.WithoutAppDomain(targetAssembly))
-            {
-                runner.OnDiscoveryComplete = OnDiscoveryComplete;
-                runner.OnExecutionComplete = OnExecutionComplete;
-                runner.OnTestFailed = OnTestFailed;
-                runner.OnTestSkipped = OnTestSkipped;
-
-                Console.WriteLine("Discovering...");
-
-                runner.Start();
-
-                finished.WaitOne();
-                finished.Dispose();
-
-                return result;
-            }
-        }
-
-        static string GetTargetAssemblyFilename(Assembly assembly)
+        public XunitRunner(Assembly assembly)
         {
             if(assembly == null)
             {
                 throw new ArgumentNullException("assembly");
             }
 
+            this.testAssembly = assembly;    
+        }
+
+        public static int Run(Assembly assembly)
+        {
+            var runner = new XunitRunner(assembly);
+            return runner.Run();
+        }
+
+        public int Run()
+        {
+            var targetAssembly = GetTargetAssemblyFilename(this.testAssembly);
+
+            using (var runner = AssemblyRunner.WithoutAppDomain(targetAssembly))
+            {
+                using (this.done = new ManualResetEvent(false))
+                {
+                    runner.OnDiscoveryComplete = this.OnDiscoveryComplete;
+                    runner.OnExecutionComplete = this.OnExecutionComplete;
+                    runner.OnTestFailed = this.OnTestFailed;
+                    runner.OnTestSkipped = this.OnTestSkipped;
+
+                    runner.Start();
+
+                    this.done.WaitOne();
+                }
+
+                return this.result;
+            }
+        }
+
+
+        protected virtual void OnDiscoveryComplete(DiscoveryCompleteInfo info)
+        {
+            lock (this.sync)
+                Console.WriteLine($"Running {info.TestCasesToRun} of {info.TestCasesDiscovered} tests...");
+        }
+
+        protected virtual void OnExecutionComplete(ExecutionCompleteInfo info)
+        {
+            lock (this.sync)
+                Console.WriteLine($"Finished: {info.TotalTests} tests in {Math.Round(info.ExecutionTime, 3)}s ({info.TestsFailed} failed, {info.TestsSkipped} skipped)");
+
+            this.done.Set();
+        }
+
+        protected virtual void OnTestFailed(TestFailedInfo info)
+        {
+            lock (this.sync)
+            {
+                Console.WriteLine("[FAIL] {0}: {1}", info.TestDisplayName, info.ExceptionMessage);
+
+                if (info.ExceptionStackTrace != null)
+                    Console.WriteLine(info.ExceptionStackTrace);
+            }
+
+            result = 1;
+        }
+
+        protected virtual void OnTestSkipped(TestSkippedInfo info)
+        {
+            lock (this.sync)
+            {
+                Console.WriteLine("[SKIP] {0}: {1}", info.TestDisplayName, info.SkipReason);
+            }
+        }
+
+        static string GetTargetAssemblyFilename(Assembly assembly)
+        {
             var assemblyFilename = assembly.Location;
 
             var shadowFolder = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
@@ -70,46 +112,6 @@ namespace Xunit.Runner.LinqPad
             File.Copy(assemblyFilename, targetAssembly, true);
 
             return targetAssembly;
-        }
-
-        static void OnDiscoveryComplete(DiscoveryCompleteInfo info)
-        {
-            lock (consoleLock)
-                Console.WriteLine($"Running {info.TestCasesToRun} of {info.TestCasesDiscovered} tests...");
-        }
-
-        static void OnExecutionComplete(ExecutionCompleteInfo info)
-        {
-            lock (consoleLock)
-                Console.WriteLine($"Finished: {info.TotalTests} tests in {Math.Round(info.ExecutionTime, 3)}s ({info.TestsFailed} failed, {info.TestsSkipped} skipped)");
-
-            finished.Set();
-        }
-
-        static void OnTestFailed(TestFailedInfo info)
-        {
-            lock (consoleLock)
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-
-                Console.WriteLine("[FAIL] {0}: {1}", info.TestDisplayName, info.ExceptionMessage);
-                if (info.ExceptionStackTrace != null)
-                    Console.WriteLine(info.ExceptionStackTrace);
-
-                Console.ResetColor();
-            }
-
-            result = 1;
-        }
-
-        static void OnTestSkipped(TestSkippedInfo info)
-        {
-            lock (consoleLock)
-            {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("[SKIP] {0}: {1}", info.TestDisplayName, info.SkipReason);
-                Console.ResetColor();
-            }
         }
     }
 }
