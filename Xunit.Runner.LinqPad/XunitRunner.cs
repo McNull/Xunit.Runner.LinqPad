@@ -12,10 +12,12 @@ namespace Xunit.Runner.LinqPad
 {
     public class XunitRunner
     {
-        private object sync = new object();
+        private static readonly object sync = new object();
         private ManualResetEvent done;
         private int result = 0;
         private Assembly testAssembly = null;
+
+        public static object Sync => sync;
 
         public XunitRunner(Assembly assembly)
         {
@@ -27,13 +29,13 @@ namespace Xunit.Runner.LinqPad
             this.testAssembly = assembly;    
         }
 
-        public static int Run(Assembly assembly)
+        public static int Run(Assembly assembly, Action<AssemblyRunner> configureRunner = null)
         {
             var runner = new XunitRunner(assembly);
-            return runner.Run();
+            return runner.Run(configureRunner);
         }
 
-        public int Run()
+        public int Run(Action<AssemblyRunner> configureRunner = null)
         {
             var targetAssembly = GetTargetAssemblyFilename(this.testAssembly);
 
@@ -45,6 +47,8 @@ namespace Xunit.Runner.LinqPad
                     runner.OnExecutionComplete = this.OnExecutionComplete;
                     runner.OnTestFailed = this.OnTestFailed;
                     runner.OnTestSkipped = this.OnTestSkipped;
+
+                    configureRunner?.Invoke(runner);
 
                     runner.Start();
 
@@ -58,13 +62,13 @@ namespace Xunit.Runner.LinqPad
 
         protected virtual void OnDiscoveryComplete(DiscoveryCompleteInfo info)
         {
-            lock (this.sync)
+            lock (sync)
                 Console.WriteLine($"Running {info.TestCasesToRun} of {info.TestCasesDiscovered} tests...");
         }
 
         protected virtual void OnExecutionComplete(ExecutionCompleteInfo info)
         {
-            lock (this.sync)
+            lock (sync)
                 Console.WriteLine($"Finished: {info.TotalTests} tests in {Math.Round(info.ExecutionTime, 3)}s ({info.TestsFailed} failed, {info.TestsSkipped} skipped)");
 
             this.done.Set();
@@ -72,7 +76,7 @@ namespace Xunit.Runner.LinqPad
 
         protected virtual void OnTestFailed(TestFailedInfo info)
         {
-            lock (this.sync)
+            lock (sync)
             {
                 Console.WriteLine("[FAIL] {0}: {1}", info.TestDisplayName, info.ExceptionMessage);
 
@@ -85,7 +89,7 @@ namespace Xunit.Runner.LinqPad
 
         protected virtual void OnTestSkipped(TestSkippedInfo info)
         {
-            lock (this.sync)
+            lock (sync)
             {
                 Console.WriteLine("[SKIP] {0}: {1}", info.TestDisplayName, info.SkipReason);
             }
