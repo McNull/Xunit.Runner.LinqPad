@@ -9,8 +9,12 @@
     <RepositoryUrl>https://github.com/asherber/Xunit.Runner.LinqPad</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>XUnit LinqPad</PackageTags>
-    <PackageIconUrl>https://raw.githubusercontent.com/xunit/media/master/logo-512-transparent.png</PackageIconUrl>
+    <PackageIcon>icon.png</PackageIcon>
   </PropertyGroup>
+  
+  <ItemGroup>
+    <None Include="icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="xunit.assert" Version="2.4.1" />
