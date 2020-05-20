@@ -1,3 +1,5 @@
+Note: Project has been moved to https://github.com/asherber/Xunit.Runner.LinqPad
+
 # Xunit.Runner.LinqPad
 
 Run [Xunit](https://xunit.github.io/) tests within LinqPad.
