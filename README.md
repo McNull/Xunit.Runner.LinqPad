@@ -1,10 +1,10 @@
-# Xunit Runner LinqPad
+# Xunit.Runner.LinqPad
 
-Run Xunit test within LinqPad
+Run [Xunit](https://xunit.github.io/) tests within LinqPad.
 
 ## Example
 
-```
+```csharp
 void Main()
 {
 	XunitRunner.Run(Assembly.GetExecutingAssembly());
@@ -32,3 +32,22 @@ public class Class1
 	}
 }
 ```
+
+## Configuration
+
+`XunitRunner` includes default actions that write information to the console for `OnDiscoveryComplete()`, `OnExecutionComplete()`, `OnTestFailed()`, and `OnTestSkipped()`. If you want more control over what happens for these or other events, you can pass an `Action<AssemblyRunner>` into `Run()`.
+
+Each `Action` you pass in that takes some action on the UI thread (like `Console.WriteLine()` should start with `lock (XunitRunner.Sync)` .
+
+```csharp
+void Main()
+{
+    Action<AssemblyRunner> configure = r =>
+    {
+        r.OnTestFailed = i => { lock (XunitRunner.Sync) Console.WriteLine("BIG FAIL"); };
+    };
+    
+    XunitRunner.Run(Assembly.GetExecutingAssembly(), configure);
+}
+```
+
